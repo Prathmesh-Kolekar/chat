@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chatbot Interface</title>
+</head>
+<style>
+    #chatbot-container {
+  width: 400px;
+  height: 500px;
+  background-color: #f7f7f7;
+  border-radius: 8px;
+  padding: 16px;
+  overflow-y: scroll;
+}
+
+#chatbot-messages {
+  height: 80%;
+  overflow-y: auto;
+}
+
+#user-input-container {
+  display: flex;
+  margin-top: 16px;
+}
+
+#start-button,
+#stop-button {
+  padding: 8px 16px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.user-message {
+  background-color: #eff6ff;
+  padding: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.chatbot-message {
+  background-color: #f1f1f1;
+  padding: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+</style>
+<body>
+  <div id="chatbot-container">
+    <div id="chatbot-messages"></div>
+    <div id="user-input-container">
+      <button id="start-button">Start</button>
+      <button id="stop-button" disabled>Stop</button>
+    </div>
+  </div>
+  <script>
+        const startButton = document.getElementById('start-button');
+    const stopButton = document.getElementById('stop-button');
+    const chatbotMessages = document.getElementById('chatbot-messages');
+
+    const recognition = new webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.lang = 'en-US';
+
+    let isListening = false;
+    let silenceTimeout = null;
+    const silenceThreshold = 2000;
+
+    function displayUserMessage(message) {
+      const userMessageElement = document.createElement('div');
+      userMessageElement.classList.add('user-message');
+      userMessageElement.textContent = message;
+      chatbotMessages.appendChild(userMessageElement);
+      chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+    }
+
+    function displayChatbotMessage(message) {
+      const chatbotMessageElement = document.createElement('div');
+      chatbotMessageElement.classList.add('chatbot-message');
+      chatbotMessageElement.textContent = message;
+      chatbotMessages.appendChild(chatbotMessageElement);
+      chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+    }
+
+    function sendUserMessage(message) {
+      const url = 'https://api-inference.huggingface.co/models/microsoft/DialoGPT-large';
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer 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', // Replace with your Hugging Face API token
+        },
+        body: JSON.stringify({ inputs: { text: message } }),
+      })
+        .then(response => response.json())
+        .then(data => {
+          const { generated_text } = data;
+          displayChatbotMessage(generated_text);
+
+          const speechMessage = new SpeechSynthesisUtterance(generated_text);
+          speechSynthesis.speak(speechMessage);
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+    }
+
+    function handleSpeechRecognition(event) {
+      const lastResult = event.results[event.results.length - 1];
+      const transcript = lastResult[0].transcript;
+      displayUserMessage(transcript);
+      sendUserMessage(transcript);
+
+      clearTimeout(silenceTimeout);
+      silenceTimeout = setTimeout(() => {
+        recognition.stop();
+        startButton.disabled = false;
+        stopButton.disabled = true;
+        isListening = false;
+      }, silenceThreshold);
+    }
+
+    startButton.addEventListener('click', () => {
+      if (!isListening) {
+        recognition.start();
+        startButton.disabled = true;
+        stopButton.disabled = false;
+        isListening = true;
+      }
+    });
+
+    stopButton.addEventListener('click', () => {
+      recognition.stop();
+      startButton.disabled = false;
+      stopButton.disabled = true;
+      isListening = false;
+    });
+
+    recognition.addEventListener('result', handleSpeechRecognition);
+
+    recognition.addEventListener('end', () => {
+      if (!isListening) {
+        startButton.disabled = false;
+        stopButton.disabled = true;
+      } else {
+        recognition.start();
+      }
+    });
+
+  </script>
+</body>
+</html>
